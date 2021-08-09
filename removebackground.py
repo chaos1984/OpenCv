@@ -8,6 +8,11 @@ from collections import deque
 from sklearn.decomposition import PCA
 from common import clock, draw_str, StatValue,FindFile
 import matplotlib.pyplot as plt
+import scipy.signal as signal
+    
+def extractMxyContour(c):
+    M = cv2.moments(c)
+    return int(M["m10"] / M["m00"]),int(M["m01"] / M["m00"])
 
 def frameprocess(frame,t0,frame_id,pyrDownNum,bg,fheight,FlagRecord,pca_contour,pca_contour_id):
 
@@ -72,18 +77,20 @@ def normalize(data)->list:
 def pyrDown(currentframe,pyrDownNum):
      for i in range(pyrDownNum):
          currentframe = cv2.pyrDown(currentframe)
+   
      return currentframe
 
 class CushionTracking():
     def __init__(self,*args,**kws):
         print ("*****%s start*****" % (time.strftime("%X", time.localtime())))
         self.VideoDir = args[0] 
+        self.plottarget = args[1]
+        self.threaded_mode = args[2]
         self.pyrDownNum = 2
-        self.threaded_mode = False
-        self.plottarget = True
+        
         self.FlagRecord= True
         self.Video = FindFile(self.VideoDir, '.avi')[0]
-        self.getTarget
+        
         self.outfile = self.VideoDir.split("\\")[-1]+"_"
         
         
@@ -91,6 +98,8 @@ class CushionTracking():
         for file in self.Video:
             self.outVideo = self.VideoDir + "\\_"+file.split("\\")[-1]
             self.outImage = self.VideoDir + "\\"+file.split("\\")[-1]
+            self.target = self.VideoDir + "\\"+file.split("\\")[-1].replace("avi","txt")
+            self.getTarget
             self.area_list = []
             self.pca_contour = []
             self.pca_contour_id = []
@@ -104,7 +113,7 @@ class CushionTracking():
             
     @property
     def getTarget(self):
-        ftarget = open(self.VideoDir+"\\target.txt")
+        ftarget = open(self.target)
         line = ftarget.readline()
         data = line.split(",")
         self.time_offset = float(data[0])
@@ -122,28 +131,31 @@ class CushionTracking():
         self.eig1_list = [];self.eig2_list=[];self.area_list = []
         self.cX_list=[];self.cY_list = []
         pca_contour_len = len(self.pca_contour)
+        cX0,cY0 = extractMxyContour(self.pca_contour[0])
         print ('Before deployment frame:',self.frame0id,"After deployment frame:",pca_contour_len)
         # print ("len(self.pca_contour)+self.frame0id",len(self.pca_contour)+self.frame0id)
         for i in range(self.frame0id):
             self.eig1_list.append(0);self.eig2_list.append(0);self.area_list.append(0);
             self.cX_list.append(0);self.cY_list.append(0);
         for i in range(pca_contour_len):
-            if i == 0:
-                cX0,cY0 = self.extractMxyContour(self.pca_contour[0])
+            # if i == 0:
+            #     cX0,cY0 = extractMxyContour(self.pca_contour[i])
             pca_contour_frame = self.pca_contour[i] 
-            cX,cY = self.extractMxyContour(pca_contour_frame)
+            cX,cY = extractMxyContour(pca_contour_frame)
+            _1,_2,eig1,eig2 = cv2.boundingRect(pca_contour_frame*np.power(2,self.pyrDownNum))
             pca_contour_frame =[j[0] for j in pca_contour_frame]
-            eig1,eig2 = self.PCAdeco(pca_contour_frame)
+
+            
             self.eig1_list.append(eig1)
             self.eig2_list.append(eig2)
-            self.cX_list.append(cX-cX0)
-            self.cY_list.append(cY-cX0)
+            self.cX_list.append(abs(cX-cX0))
+            self.cY_list.append(abs(cY-cY0))
             self.area_list.append(cv2.contourArea(self.pca_contour[i] ))
         # print (len(eig1_list),len(eig2_list),len(area_list))
             
-        
-        self.cX_list = [i - cX0 for i in self.cX_list]
-        self.cY_list = [i - cY0 for i in self.cY_list]
+        # if self.area_list[0]>self.area_list[1]:
+        #     self.area_list[0] = 0
+        # self.area_list = signal.medfilt(self.area_list,3)
         self.dis = [distance(self.cX_list[i],self.cY_list[i]) for i in range(len(self.cX_list))] 
         self.area_list = normalize(self.area_list)
         self.eig1_list = normalize(self.eig1_list)
@@ -153,14 +165,16 @@ class CushionTracking():
         self.dis = normalize(self.dis)
         self.frametime = self.frametime[:len(self.eig2_list)]
         plt.plot(self.frametime,self.eig1_list,label="X")
-        plt.plot(self.frametime,self.eig2_list,label="Y")
-        plt.plot(self.frametime,self.cX_list,label="cX")
-        plt.plot(self.frametime,self.cY_list,label="cY")
+        plt.plot(self.frametime,self.eig2_list,label="Z")
+        # plt.plot(self.frametime,self.cX_list,label="cX")
+        # plt.plot(self.frametime,self.cY_list,label="cY")
         plt.plot(self.frametime,self.dis,label="Dis")
         plt.plot(self.frametime,self.area_list,label="Area")
         if self.plottarget :
             for i in self.ref_axis:
                 plt.plot([i,i],[0,2])
+        figure_title = "Time:%s" %(str(self.timecost))
+        plt.title(figure_title)
         plt.xlabel("Time(ms)")
         plt.ylabel("Value")
         plt.legend()
@@ -169,7 +183,7 @@ class CushionTracking():
         plt.cla()                           
     
         
-    def drawBox(self,c):
+    def drawMinareBox(self,c):
         # 得到最小矩形的坐标
         rect = cv2.minAreaRect(c)
         #
@@ -177,9 +191,13 @@ class CushionTracking():
         box = np.int0(box)
         return box
     
-    def extractMxyContour(self,c):
-        M = cv2.moments(c)
-        return int(M["m10"] / M["m00"]),int(M["m01"] / M["m00"])
+    def drawRectBox(self,c):
+        # 得到最小矩形的坐标
+        (x, y, w, h) = cv2.boundingRect(c)
+        
+
+        return 
+
     
     def PCAdeco(self,data):
         pca = PCA(n_components=2)
@@ -190,6 +208,8 @@ class CushionTracking():
         fshape = frame.shape
         self.fheight = fshape[0]
         self.fwidth = fshape[1]
+        self.frameArea = self.fheight*self.fwidth/np.power(2,2*self.pyrDownNum)
+        
         self.videoWriter = cv2.VideoWriter(self.outVideo,cv2.VideoWriter_fourcc('m', 'p', '4', 'v'),30,(self.fwidth,self.fheight))
         self.bg  = pyrDown(frame, self.pyrDownNum)
         self.bg = cv2.bilateralFilter(self.bg, d=0, sigmaColor=100, sigmaSpace=15)
@@ -217,7 +237,7 @@ class CushionTracking():
         while(True):
             frame_id += 1
             ret, frame = self.cap.read()
-            print ("frame_id",frame_id)
+            # print ("frame_id",frame_id)
             if first_frame == 0:
                self.frame0(frame)
                first_frame = 1
@@ -259,8 +279,9 @@ class CushionTracking():
         self.videoWriter.release()
         self.cap.release()
         cv2.destroyAllWindows()
+        self.timecost = round(time.time() - t_start,1)
         print ("*****%s END*****" % (time.strftime("%X", time.localtime())))
-        print ("*****%.3fs *****" % (time.time() - t_start))
+        print ("*****%.3fs *****" % (self.timecost))
 
     
     def frameprocess(self,frame,t0,frame_id):
@@ -288,13 +309,16 @@ class CushionTracking():
            
             # 找出图像矩
             try:
-                cX,cY = self.extractMxyContour(c)
+                cX,cY = extractMxyContour(c)
                 # print (cY ,fheight/4.5)
+                contourArea =cv2.contourArea(contours[index])
+                if contourArea > self.frameArea/6:
+                    break
+                # print (contourArea)
                 if cY < self.fheight/5. :
                     
-
                     # print (cY ,fheight/5)
-                    areas.append(cv2.contourArea(contours[index]))
+                    areas.append(contourArea)
                     index_list.append(index)
             except:
                 pass
@@ -304,6 +328,7 @@ class CushionTracking():
                 self.frame0id = frame_id
                 print ("Deployment start frame:",self.frame0id)
                 self.FlagRecord = False
+            # print (max(areas))
             max_id = index_list[areas.index(max(areas))]
             c = contours[max_id]
             # cX,cY = self.extractMxyContour(c)
@@ -311,10 +336,13 @@ class CushionTracking():
             self.pca_contour.append(c)
             self.pca_contour_id.append(frame_id)
             # box = self.drawBox(c)
-            print ("find:",frame_id)
+            # print ("find:",frame_id)
             cv2.drawContours(frame, [c*4],-1, (0, 255, 0), 1)
-            # cv2.drawContours(frame, [box*4],-1, (255, 255, 0), 1)
-            time.sleep(2*t0)
+            x, y, w, h = cv2.boundingRect(c*np.power(2,self.pyrDownNum))
+            
+            cv2.rectangle(frame,pt1=(x, y), pt2=(x+w, y+h),color=(255, 255, 255), thickness=3)
+        else:
+            time.sleep(t0)
         return frame,t0
 
 if __name__ == "__main__":
@@ -325,8 +353,8 @@ if __name__ == "__main__":
         print(wkdir)
     except:
         print('No file')
-        wkdir = 'C:\\Users\\chaos\\Desktop\\Opencv\\video\\PAB'
+        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\SAB'
 
-    a = CushionTracking(wkdir)
+    a = CushionTracking(wkdir,True,False)
     a.run()
     
