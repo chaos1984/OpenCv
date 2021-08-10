@@ -14,6 +14,8 @@ def extractMxyContour(c):
     M = cv2.moments(c)
     return int(M["m10"] / M["m00"]),int(M["m01"] / M["m00"])
 
+
+
 def frameprocess(frame,t0,frame_id,pyrDownNum,bg,fheight,FlagRecord,pca_contour,pca_contour_id):
 
         frame_copy =pyrDown(frame, pyrDownNum)
@@ -87,6 +89,7 @@ class CushionTracking():
         self.plottarget = args[1]
         self.threaded_mode = args[2]
         self.pyrDownNum = 2
+        self.scale = np.power(2,self.pyrDownNum)
         
         self.FlagRecord= True
         self.Video = FindFile(self.VideoDir, '.avi')[0]
@@ -142,7 +145,7 @@ class CushionTracking():
             #     cX0,cY0 = extractMxyContour(self.pca_contour[i])
             pca_contour_frame = self.pca_contour[i] 
             cX,cY = extractMxyContour(pca_contour_frame)
-            _1,_2,eig1,eig2 = cv2.boundingRect(pca_contour_frame*np.power(2,self.pyrDownNum))
+            _1,_2,eig1,eig2 = cv2.boundingRect(pca_contour_frame*self.scale)
             pca_contour_frame =[j[0] for j in pca_contour_frame]
 
             
@@ -182,22 +185,7 @@ class CushionTracking():
         plt.savefig(self.outImage+".png")
         plt.cla()                           
     
-        
-    def drawMinareBox(self,c):
-        # 得到最小矩形的坐标
-        rect = cv2.minAreaRect(c)
-        #
-        box = cv2.boxPoints(rect)  
-        box = np.int0(box)
-        return box
     
-    def drawRectBox(self,c):
-        # 得到最小矩形的坐标
-        (x, y, w, h) = cv2.boundingRect(c)
-        
-
-        return 
-
     
     def PCAdeco(self,data):
         pca = PCA(n_components=2)
@@ -298,7 +286,8 @@ class CushionTracking():
         thresh = cv2.threshold(diff,0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
         # thresh_dilate = cv2.dilate(thresh.copy(), None, iterations=1)
-        # thresh_erode = cv2.erode(thresh_dilate.copy(), None, iterations=1)
+        # thresh_erode = cv2.erode(thresh, None, iterations=1)
+        # thresh_dilate = cv2.dilate(thresh_erode, None, iterations=1)
         contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         areas = []
         index_list =[]
@@ -312,7 +301,7 @@ class CushionTracking():
                 cX,cY = extractMxyContour(c)
                 # print (cY ,fheight/4.5)
                 contourArea =cv2.contourArea(contours[index])
-                if contourArea > self.frameArea/6:
+                if contourArea > self.frameArea/4:
                     break
                 # print (contourArea)
                 if cY < self.fheight/5. :
@@ -331,19 +320,39 @@ class CushionTracking():
             # print (max(areas))
             max_id = index_list[areas.index(max(areas))]
             c = contours[max_id]
-            # cX,cY = self.extractMxyContour(c)
             
+            cX,cY = extractMxyContour(c)
+            self.drawPoint(frame,cX,cY)
             self.pca_contour.append(c)
             self.pca_contour_id.append(frame_id)
-            # box = self.drawBox(c)
-            # print ("find:",frame_id)
-            cv2.drawContours(frame, [c*4],-1, (0, 255, 0), 1)
-            x, y, w, h = cv2.boundingRect(c*np.power(2,self.pyrDownNum))
-            
-            cv2.rectangle(frame,pt1=(x, y), pt2=(x+w, y+h),color=(255, 255, 255), thickness=3)
+            self.drawContour(frame,c,1)
+            self.drawRect(frame,c)
+            self.drawMinareBox(frame,c)
         else:
             time.sleep(t0)
         return frame,t0
+    
+    def drawContour(self,frame,c,ratio):
+        epsilon = ratio*cv2.arcLength(c,True) 
+        approx = cv2.approxPolyDP(c,epsilon,True)
+        cv2.drawContours(frame, [approx*self.scale],-1, (0, 255, 0), 1)
+    
+    def drawMinareBox(self,frame,c):
+        # 得到最小矩形的坐标
+        rect = cv2.minAreaRect(c)
+        #
+        box = cv2.boxPoints(rect)  
+        box = np.int0(box)
+        cv2.drawContours(frame, [box*self.scale],-1, (0, 255, 0), 1)
+        return box
+       
+    def drawRect(self,frame,c):
+        x, y, w, h = cv2.boundingRect(c*self.scale)
+        
+        cv2.rectangle(frame,pt1=(x, y), pt2=(x+w, y+h),color=(255, 255, 255), thickness=3)
+        
+    def drawPoint(self,frame,x,y):
+        cv2.circle(frame, (x*self.scale, y*self.scale), 10,(0, 0, 255), 0)
 
 if __name__ == "__main__":
 
@@ -353,7 +362,7 @@ if __name__ == "__main__":
         print(wkdir)
     except:
         print('No file')
-        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\SAB'
+        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\PAB'
 
     a = CushionTracking(wkdir,True,False)
     a.run()
