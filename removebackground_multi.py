@@ -8,7 +8,19 @@ from collections import deque
 from sklearn.decomposition import PCA
 from common import clock, draw_str, StatValue,FindFile
 import matplotlib.pyplot as plt
-import scipy.signal as signal
+from scipy.signal import find_peaks
+
+def checkTermination(dis):
+    # print (dis)
+    # if dis[-1-:-1] > dis[-2] and :
+    peaks, _ = find_peaks(dis, width=10)
+    # print (dis)
+    if len(peaks)>0:
+        print (peaks)
+        print (dis)
+        return peaks[0]
+    else:
+        return 999
     
 def extractMxyContour(c):
     M = cv2.moments(c)
@@ -23,7 +35,6 @@ def normalize(data)->list:
 def pyrDown(currentframe,pyrDownNum):
      for i in range(pyrDownNum):
          currentframe = cv2.pyrDown(currentframe)
-   
      return currentframe
 
 class CushionTracking():
@@ -32,22 +43,26 @@ class CushionTracking():
         self.VideoDir = args[0] 
         self.plottarget = args[1]
         self.threaded_mode = args[2]
-        self.offtime = int(args[3])
+        self.ROI = args[3]
+        self.delta_t = args[4]
+        self.time_offset = args[5]
+        self.extend = args[6]
         self.pyrDownNum = 2
         self.scale = np.power(2,self.pyrDownNum)
-        
         self.FlagRecord= True
         self.Video = FindFile(self.VideoDir, '.avi')[0]
-        
         self.outfile = self.VideoDir.split("\\")[-1]+"_"
-        
+        self.offframe = int(abs(self.time_offset)/self.delta_t)
+        self.endframe = int(self.ROI - self.time_offset)/self.delta_t
+        self.t0 = 0
         
     def run(self):
         for file in self.Video:
             self.outVideo = self.VideoDir + "\\_"+file.split("\\")[-1]
             self.outImage = self.VideoDir + "\\"+file.split("\\")[-1]
             self.target = self.VideoDir + "\\"+file.split("\\")[-1].replace("avi","txt")
-            self.getTarget
+            if self.plottarget == True:
+                self.getTarget
             self.area_list = []
             self.pca_contour = []
             self.pca_contour_id = []
@@ -74,63 +89,28 @@ class CushionTracking():
         print ("ROI:",self.ROI,"ENDFRAME:",self.endframe)
  
         
-        
     def curveplot(self):
-        
-        # self.eig1_list = [];self.eig2_list=[];
-        # self.area_list = []
-        # self.cX_list=[];self.cY_list = []
         self.dis =[]
         pca_contour_len = len(self.pca_contour)
-        print ("pca_contour_len ")
-        print (pca_contour_len )
         cX0,cY0 = extractMxyContour(self.pca_contour[0])
         print ('Before deployment frame:',self.frame0id - self.offframe,"After deployment frame:",pca_contour_len)
-        # print ("len(self.pca_contour)+self.frame0id",len(self.pca_contour)+self.frame0id)
         frameNumBefore = int(self.frame0id - self.offframe)
         for i in range(frameNumBefore):
-            # self.eig1_list.append(0);self.eig2_list.append(0);
-            # self.area_list.append(0);
-            # self.cX_list.append(0);self.cY_list.append(0);
             self.dis.append(0)
         for i in range(pca_contour_len):
-            # if i == 0:
-            #     cX0,cY0 = extractMxyContour(self.pca_contour[i])
             pca_contour_frame = self.pca_contour[i] 
             cX,cY = extractMxyContour(pca_contour_frame)
-            # _1,_2,eig1,eig2 = cv2.boundingRect(pca_contour_frame*self.scale)
             pca_contour_frame =[j[0] for j in pca_contour_frame]
-
-            
-            # self.eig1_list.append(eig1)
-            # self.eig2_list.append(eig2)
-            # self.cX_list.append(abs(cX-cX0))
-            # self.cY_list.append(abs(cY-cY0))
             self.dis.append(distance(abs(cX-cX0),abs(cX-cX0)))
-            # self.area_list.append(cv2.contourArea(self.pca_contour[i] ))
-        # print (len(eig1_list),len(eig2_list),len(area_list))
-            
-        # if self.area_list[0]>self.area_list[1]:
-        #     self.area_list[0] = 0
-        # self.area_list = signal.medfilt(self.area_list,3)
-        # self.dis = [distance(self.cX_list[i],self.cY_list[i]) for i in range(len(self.cX_list))] 
-        # self.area_list = normalize(self.area_list)
-        # self.eig1_list = normalize(self.eig1_list)
-        # self.eig2_list = normalize(self.eig2_list)
-        # self.cX_list = normalize(self.cX_list)
-        # self.cY_list = normalize(self.cY_list)
         self.dis = normalize(self.dis)
-        self.frametime = self.frametime[self.offframe:self.offframe+len(self.dis)]
-        # plt.plot(self.frametime,self.eig1_list,label="X")
-        # plt.plot(self.frametime,self.eig2_list,label="Z")
-        # plt.plot(self.frametime,self.cX_list,label="cX")
-        # plt.plot(self.frametime,self.cY_list,label="cY")
+        self.frametime = self.frametime[self.offframe:len(self.dis)+self.offframe]
         plt.plot(self.frametime,self.dis,label="Dis")
+        plt.scatter(self.frametime[-self.extend],self.dis[-self.extend],label="Full time")
         # plt.plot(self.frametime,self.area_list,label="Area")
         if self.plottarget :
             for i in self.ref_axis:
                 plt.plot([i,i],[0,2])
-        figure_title = "Time:%s" %(str(self.timecost))
+        figure_title = "Cost Time:%s   Full time:%s" %(str(self.timecost),str(self.frametime[-self.extend]))
         plt.title(figure_title)
         plt.xlabel("Time(ms)")
         plt.ylabel("Value")
@@ -138,8 +118,6 @@ class CushionTracking():
         plt.grid('on')
         plt.savefig(self.outImage+".png")
         plt.cla()                           
-    
-    
     
     def PCAdeco(self,data):
         pca = PCA(n_components=2)
@@ -158,6 +136,7 @@ class CushionTracking():
         
     def multiProccessing(self,video_file):
         t_start = time.time()
+        self.discheck = np.array([])
         self.cap = cv2.VideoCapture(video_file)
         self.frames_num = int(self.cap.get(7))-1
         print ('Frame number of movie:',self.frames_num)
@@ -170,33 +149,25 @@ class CushionTracking():
         pending = deque()
         print("CPU",threadn)
         # latency = StatValue()
-        # frame_interval = StatValue()
-        # last_frame_time = clock()
         res_list = []
         frame_id = 0
         latency = StatValue()
         # frame_interval = StatValue()
         while(True):
             frame_id += 1
+
+            if (frame_id > self.endframe+self.extend):
+                
+                break
             ret, frame = self.cap.read()
+            if (frame_id < abs(self.offframe)):
+                print (frame_id , abs(self.offframe))
+                continue
             # print ("frame_id",frame_id)
             if first_frame == 0:
                self.frame0(frame)
                first_frame = 1
-            
-            # t = clock()
-            # frame_interval.update(t - last_frame_time)
-            # print ("frame_interval",frame_interval)
-            # last_frame_time = t
-            # print ("frame_id",frame_id  )
-            
-            if (frame_id > self.endframe):
-                
-                break
-            # print (frame_id,self.offframe)
-            if (frame_id < abs(self.offframe)):
-                print (frame_id , abs(self.offframe))
-                continue
+           
             while len(pending) > 0 and pending[0].ready():
                 res= pending.popleft().get()
                 # latency.update(clock() - t0)
@@ -216,9 +187,6 @@ class CushionTracking():
                     
                     cv2.imshow('threaded video', res)
                     res_list.append(res)
-                
-        
-         
             if cv2.waitKey(150) & 0xff == 27:
                 break
         for image in res_list:
@@ -258,7 +226,7 @@ class CushionTracking():
             # 找出图像矩
             try:
                 cX,cY = extractMxyContour(c)
-                # print (cY ,fheight/4.5)
+
                 contourArea =cv2.contourArea(contours[index])
                 if contourArea > self.frameArea/4:
                     break
@@ -279,16 +247,21 @@ class CushionTracking():
             # print (max(areas))
             max_id = index_list[areas.index(max(areas))]
             c = contours[max_id]
-            
             cX,cY = extractMxyContour(c)
+            self.discheck = np.append(self.discheck,distance(cX,cY))
+            # self.endframe = checkTermination(self.discheck)
+            # self.dis.append(distance(cX,cY))
+            self.endframe =  checkTermination(self.discheck)
             self.drawPoint(frame,cX,cY)
             self.pca_contour.append(c)
             self.pca_contour_id.append(frame_id)
             self.drawContour(frame,c,0.001)
             self.drawRect(frame,c)
             self.drawMinareBox(frame,c)
+
         else:
             time.sleep(0)
+
         return frame
     
     def drawContour(self,frame,c,ratio):
@@ -321,8 +294,8 @@ if __name__ == "__main__":
         print(wkdir)
     except:
         print('No file')
-        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\DAB'
+        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\DAB-TEST'
 
-    a = CushionTracking(wkdir,True,True,10)
+    a = CushionTracking(wkdir,False,False,35,0.25,-10,8)
     a.run()
     

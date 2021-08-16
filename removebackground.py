@@ -88,6 +88,7 @@ class CushionTracking():
         self.VideoDir = args[0] 
         self.plottarget = args[1]
         self.threaded_mode = args[2]
+        self.offtime = int(args[3])
         self.pyrDownNum = 2
         self.scale = np.power(2,self.pyrDownNum)
         
@@ -102,7 +103,8 @@ class CushionTracking():
             self.outVideo = self.VideoDir + "\\_"+file.split("\\")[-1]
             self.outImage = self.VideoDir + "\\"+file.split("\\")[-1]
             self.target = self.VideoDir + "\\"+file.split("\\")[-1].replace("avi","txt")
-            self.getTarget
+            if self.plottarget == True:
+                self.getTarget
             self.area_list = []
             self.pca_contour = []
             self.pca_contour_id = []
@@ -159,7 +161,7 @@ class CushionTracking():
         # if self.area_list[0]>self.area_list[1]:
         #     self.area_list[0] = 0
         # self.area_list = signal.medfilt(self.area_list,3)
-        self.dis = [distance(self.cX_list[i],self.cY_list[i]) for i in range(len(self.cX_list))] 
+        # self.dis = [distance(self.cX_list[i],self.cY_list[i]) for i in range(len(self.cX_list))] 
         self.area_list = normalize(self.area_list)
         self.eig1_list = normalize(self.eig1_list)
         self.eig2_list = normalize(self.eig2_list)
@@ -364,6 +366,6 @@ if __name__ == "__main__":
         print('No file')
         wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\PAB'
 
-    a = CushionTracking(wkdir,True,False)
+    a = CushionTracking(wkdir,True,True)
     a.run()
     
