@@ -47,10 +47,10 @@ def checkTermination(dis,resolution):
         
     if len(peaks)>0:
         
-        prominences = peak_prominences(dis, peaks)[0]
+        # prominences = peak_prominences(dis, peaks)[0]
         
-        print ("~~~~~~")
-        print (resolution[0])
+        # print ("~~~~~~")
+        # print (resolution[0])
         # print (peaks,len(dis))
         # print (_)
         # print (peaks)
@@ -96,7 +96,7 @@ def checkTerminate(data):
     # data = medfilt(data,3)
     fullframe = len(data)-1
     for i in range(len(data)):
-        if data[-1-i]>data[-2-i] or data[-2-i]>data[-3-i]:
+        if data[-1-i]>data[-2-i] or data[-2-i]>data[-3-i] or data[-3-i]>data[-4-i]:
             fullframe = len(data)-1-i
         else:
             return fullframe
@@ -181,8 +181,8 @@ class CushionTracking():
         self.dis = normalize(self.dis)
         self.frametime = self.frametime[self.offframe:len(self.dis)+self.offframe]
         fullframe = checkTerminate(self.dis)
-        print ("**Full time**: %3.2f" %(self.frametime[-1]))
-        figure_title = "Time:%s   Full time  %3.2f " %(str(self.timecost),self.frametime[-1 ])
+        print ("**Full time**: %3.2f" %(self.frametime[fullframe]))
+        figure_title = "Time:%s   Full time  %3.2f " %(str(self.timecost),self.frametime[fullframe])
         plt.title(figure_title)
         plt.plot(self.frametime,self.dis,label="Dis")
         plt.scatter(self.frametime[fullframe],self.dis[fullframe],label="Full time")
@@ -371,7 +371,7 @@ if __name__ == "__main__":
         print(wkdir)
     except:
         print('No file')
-        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\DAB'
+        wkdir = 'C:\\Users\\yujin.wang\\Desktop\\Codie\\Opencv\\CushionfromCTCTEST\\DAB_TEST3'
         
     if wkdir[-3:] != "avi":
             VideoDir = FindFile(wkdir , '.avi')[0]
