@@ -122,7 +122,7 @@ def pyrDown(currentframe,pyrDownNum):
      return currentframe
 
 class CushionTracking():
-    def __init__(self,filedir,target=False,mp=True,resolution=0.08):
+    def __init__(self,filedir,target=False,mp=True,resolution=0.03):
         self.filedir = filedir
         self.plottarget = target
         self.threaded_mode = mp
@@ -377,7 +377,7 @@ if __name__ == "__main__":
             VideoDir = FindFile(wkdir , '.avi')[0]
             for file in VideoDir:
                 print (file)
-                a = CushionTracking([file],target=False,mp=True,resolution=0.05)
+                a = CushionTracking([file],target=False,mp=True,resolution=0.02)
                 a.run()
     else:
             VideoDir = [wkdir] 
